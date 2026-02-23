@@ -26,11 +26,19 @@
 
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwks-Rnlr1dZ-EuPgo-zpqXdFQ1MfPYbgBMxypLbqZm-t4Gx7uKzsqXYr_IY9Sz91o/exec";
 
-    const SECTOR_COLORS = {
-      "IT":"#3B82F6","통신":"#8B5CF6","소비재":"#F59E0B","금융":"#10B981",
-      "헬스케어":"#EF4444","필수소비재":"#06B6D4","산업재":"#F97316",
-      "에너지":"#84CC16","소재":"#EC4899","부동산":"#A78BFA","유틸리티":"#FCD34D",
-    };
+      const SECTOR_COLORS = {
+          "IT":"#3B82F6", "Information Technology":"#3B82F6",
+          "통신":"#8B5CF6", "Communication":"#8B5CF6",
+          "소비재":"#F59E0B", "Consumer Discretionary":"#F59E0B",
+          "금융":"#10B981", "Financials":"#10B981",
+          "헬스케어":"#EF4444", "Health Care":"#EF4444",
+          "필수소비재":"#06B6D4", "Consumer Staples":"#06B6D4",
+          "산업재":"#F97316", "Industrials":"#F97316",
+          "에너지":"#84CC16", "Energy":"#84CC16",
+          "소재":"#EC4899", "Materials":"#EC4899",
+          "부동산":"#A78BFA", "Real Estate":"#A78BFA",
+          "유틸리티":"#FCD34D", "Utilities":"#FCD34D",
+};
 
     function getSectorData(date, allData) {
       const map = {};
