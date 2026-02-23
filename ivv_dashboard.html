@@ -14,7 +14,7 @@
     body { background: #060D14; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #0B1623; }
-    ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #3A5A7F; border-radius: 3px; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
     .grid-2 { display: grid; grid-template-columns: 1fr 1.3fr; gap: 24px; }
     .grid-equal { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -45,34 +45,60 @@
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect } = React;
-    const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, CartesianGrid, Area, AreaChart } = Recharts;
+    const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, CartesianGrid } = Recharts;
 
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwks-Rnlr1dZ-EuPgo-zpqXdFQ1MfPYbgBMxypLbqZm-t4Gx7uKzsqXYr_IY9Sz91o/exec";
 
-    const SECTOR_COLORS = {
-      "IT":"#3B82F6","Information Technology":"#3B82F6",
-      "통신":"#8B5CF6","Communication":"#8B5CF6",
-      "소비재":"#F59E0B","Consumer Discretionary":"#F59E0B",
-      "금융":"#10B981","Financials":"#10B981",
-      "헬스케어":"#EF4444","Health Care":"#EF4444",
-      "필수소비재":"#06B6D4","Consumer Staples":"#06B6D4",
-      "산업재":"#F97316","Industrials":"#F97316",
-      "에너지":"#84CC16","Energy":"#84CC16",
-      "소재":"#EC4899","Materials":"#EC4899",
-      "부동산":"#A78BFA","Real Estate":"#A78BFA",
-      "유틸리티":"#FCD34D","Utilities":"#FCD34D",
+    // 영어 → 한글 섹터명 변환
+    const SECTOR_KO = {
+      "Information Technology": "IT·기술",
+      "Communication": "통신",
+      "Communication Services": "통신",
+      "Consumer Discretionary": "소비재",
+      "Financials": "금융",
+      "Health Care": "헬스케어",
+      "Consumer Staples": "필수소비재",
+      "Industrials": "산업재",
+      "Energy": "에너지",
+      "Materials": "소재",
+      "Real Estate": "부동산",
+      "Utilities": "유틸리티",
+      "IT": "IT·기술",
+      "IT·기술": "IT·기술",
+      "통신": "통신",
+      "소비재": "소비재",
+      "금융": "금융",
+      "헬스케어": "헬스케어",
+      "필수소비재": "필수소비재",
+      "산업재": "산업재",
+      "에너지": "에너지",
+      "소재": "소재",
+      "부동산": "부동산",
+      "유틸리티": "유틸리티",
     };
+
+    const SECTOR_COLORS = {
+      "IT·기술":"#3B82F6","통신":"#8B5CF6","소비재":"#F59E0B",
+      "금융":"#10B981","헬스케어":"#EF4444","필수소비재":"#06B6D4",
+      "산업재":"#F97316","에너지":"#84CC16","소재":"#EC4899",
+      "부동산":"#A78BFA","유틸리티":"#FCD34D",
+    };
+
+    function toKo(sector) { return SECTOR_KO[sector] || sector; }
 
     function getSectorData(date, allData) {
       const map = {};
-      allData.filter(d => d.date===date).forEach(d => { map[d.sector]=(map[d.sector]||0)+d.weight; });
+      allData.filter(d => d.date===date).forEach(d => {
+        const ko = toKo(d.sector);
+        map[ko] = (map[ko]||0) + d.weight;
+      });
       return Object.entries(map).map(([name,value]) => ({name,value:+value.toFixed(2)})).sort((a,b) => b.value-a.value);
     }
     function getRankChanges(today, yesterday, allData) {
       const todayData = allData.filter(d => d.date===today).sort((a,b) => a.rank-b.rank);
       const yestMap = {};
       allData.filter(d => d.date===yesterday).forEach(d => { yestMap[d.ticker]=d.rank; });
-      return todayData.map(d => ({...d,prevRank:yestMap[d.ticker],rankChange:yestMap[d.ticker]!==undefined?yestMap[d.ticker]-d.rank:null}));
+      return todayData.map(d => ({...d, sectorKo:toKo(d.sector), prevRank:yestMap[d.ticker], rankChange:yestMap[d.ticker]!==undefined?yestMap[d.ticker]-d.rank:null}));
     }
     function getNewAndExited(today, yesterday, allData) {
       const todaySet = new Set(allData.filter(d => d.date===today).map(d => d.ticker));
@@ -84,14 +110,15 @@
       if (!active||!payload||!payload.length) return null;
       const d = payload[0].payload;
       return (
-        <div style={{background:"#0F1923",border:"1px solid #1E3A5F",borderRadius:8,padding:"10px 14px"}}>
+        <div style={{background:"#0F1923",border:"1px solid #3A5A7F",borderRadius:8,padding:"10px 14px"}}>
           <div style={{color:"#E2B96A",fontWeight:700,fontSize:15}}>{d.ticker}</div>
-          <div style={{color:"#94A3B8",fontSize:13}}>{d.name}</div>
+          <div style={{color:"#CBD5E1",fontSize:13}}>{d.name}</div>
           <div style={{color:"#fff",fontWeight:600,marginTop:4}}>{Number(d.weight).toFixed(2)}%</div>
         </div>
       );
     };
-    const card = {background:"rgba(14,28,46,0.5)",border:"1px solid #1E3A5F",borderRadius:12,padding:24};
+
+    const card = {background:"rgba(14,28,46,0.7)",border:"1px solid #2A4A6F",borderRadius:14,padding:24};
 
     function App() {
       const [allData,setAllData] = useState([]);
@@ -99,7 +126,6 @@
       const [error,setError] = useState(null);
       const [lastUpdated,setLastUpdated] = useState(null);
       const [selDate,setSelDate] = useState(null);
-      const [selTicker,setSelTicker] = useState("NVDA");
       const [activeTab,setActiveTab] = useState("overview");
 
       useEffect(() => {
@@ -121,107 +147,111 @@
       const sectorData = getSectorData(currentDate,allData);
       const withChanges = getRankChanges(currentDate,prevDate,allData);
       const {newEntries,exited} = getNewAndExited(currentDate,prevDate,allData);
-      const trendData = allData.filter(d => d.ticker===selTicker).sort((a,b) => a.date.localeCompare(b.date)).map(d => ({date:d.date.slice(5),weight:d.weight,rank:d.rank}));
       const top3Weight = top10.slice(0,3).reduce((s,d) => s+d.weight,0);
-      const itData = sectorData.find(s => s.name==="IT"||s.name==="Information Technology");
+      const itData = sectorData.find(s => s.name==="IT·기술");
       const itWeight = itData?itData.value:0;
 
       if (loading) return (
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:16,background:"linear-gradient(135deg,#060D14,#0B1623)",fontFamily:"monospace"}}>
           <div style={{width:52,height:52,borderRadius:12,background:"linear-gradient(135deg,#E2B96A,#C8962E)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:18,color:"#060D14",animation:"pulse 1.4s infinite"}}>IVV</div>
-          <div style={{color:"#4A6580",fontSize:13,letterSpacing:3}}>LOADING DATA...</div>
+          <div style={{color:"#94A3B8",fontSize:13,letterSpacing:3}}>LOADING DATA...</div>
         </div>
       );
       if (error) return (
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:14,background:"linear-gradient(135deg,#060D14,#0B1623)",fontFamily:"monospace",padding:40}}>
           <div style={{color:"#EF4444",fontSize:16,textAlign:"center"}}>⚠ {error}</div>
+          <div style={{color:"#94A3B8",fontSize:12,maxWidth:460,textAlign:"center",lineHeight:1.8}}>Apps Script 배포 시 <strong style={{color:"#fff"}}>액세스: 모든 사용자(익명 포함)</strong>으로 설정했는지 확인해주세요.</div>
         </div>
       );
 
       return (
-        <div style={{fontFamily:"'Courier New',monospace",background:"linear-gradient(135deg,#060D14 0%,#0B1623 50%,#0E1C2E 100%)",minHeight:"100vh",color:"#E2E8F0"}}>
+        <div style={{fontFamily:"'Courier New',monospace",background:"linear-gradient(135deg,#060D14 0%,#0B1623 50%,#0E1C2E 100%)",minHeight:"100vh",color:"#F1F5F9"}}>
 
-          <div style={{borderBottom:"1px solid #1E3A5F",background:"rgba(14,28,46,0.85)",position:"sticky",top:0,zIndex:100}}>
+          {/* 헤더 */}
+          <div style={{borderBottom:"1px solid #2A4A6F",background:"rgba(14,28,46,0.92)",position:"sticky",top:0,zIndex:100}}>
             <div className="header-pad header-inner">
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#E2B96A,#C8962E)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:16,color:"#060D14",flexShrink:0}}>IVV</div>
                 <div>
-                  <div style={{fontWeight:700,fontSize:16,color:"#F1F5F9"}}>iShares Russell Top 200 ETF</div>
-                  <div className="hide-mobile" style={{fontSize:11,color:"#4A6580",letterSpacing:2}}>HOLDINGS DASHBOARD · TOP 30</div>
+                  <div style={{fontWeight:700,fontSize:16,color:"#FFFFFF"}}>iShares Russell Top 200 ETF</div>
+                  <div className="hide-mobile" style={{fontSize:11,color:"#94A3B8",letterSpacing:2}}>HOLDINGS DASHBOARD · TOP 30</div>
                 </div>
               </div>
               <div className="header-right">
-                <span style={{fontSize:12,color:"#4A6580"}}>기준일</span>
-                <select value={currentDate} onChange={e => setSelDate(e.target.value)} style={{background:"#0F1923",border:"1px solid #1E3A5F",color:"#E2B96A",borderRadius:6,padding:"5px 10px",fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>
+                <span style={{fontSize:12,color:"#CBD5E1"}}>기준일</span>
+                <select value={currentDate} onChange={e => setSelDate(e.target.value)} style={{background:"#0F1923",border:"1px solid #2A4A6F",color:"#E2B96A",borderRadius:6,padding:"5px 10px",fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>
                   {dates.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
-                <div style={{padding:"5px 10px",borderRadius:6,background:"rgba(226,185,106,0.1)",border:"1px solid rgba(226,185,106,0.3)",fontSize:12,color:"#E2B96A"}}>● LIVE</div>
+                <div style={{padding:"5px 10px",borderRadius:6,background:"rgba(226,185,106,0.15)",border:"1px solid rgba(226,185,106,0.4)",fontSize:12,color:"#E2B96A",fontWeight:700}}>● LIVE</div>
               </div>
             </div>
           </div>
 
-          <div className="tab-pad" style={{display:"flex",borderBottom:"1px solid #1E3A5F",background:"rgba(6,13,20,0.5)",overflowX:"auto"}}>
-            {[{id:"overview",label:"오늘 스냅샷"},{id:"sector",label:"섹터 구성"},{id:"trend",label:"순위·비중"},{id:"changes",label:"진입·이탈"}].map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{background:"none",border:"none",cursor:"pointer",padding:"12px 16px",fontSize:13,fontFamily:"inherit",color:activeTab===tab.id?"#E2B96A":"#4A6580",borderBottom:activeTab===tab.id?"2px solid #E2B96A":"2px solid transparent",marginBottom:-1,transition:"all 0.2s",whiteSpace:"nowrap"}}>{tab.label}</button>
+          {/* 탭 — 순위·비중 추이 제거 */}
+          <div className="tab-pad" style={{display:"flex",borderBottom:"1px solid #2A4A6F",background:"rgba(6,13,20,0.7)",overflowX:"auto"}}>
+            {[{id:"overview",label:"오늘 스냅샷"},{id:"sector",label:"섹터 구성"},{id:"changes",label:"진입·이탈"}].map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{background:"none",border:"none",cursor:"pointer",padding:"14px 20px",fontSize:14,fontFamily:"inherit",fontWeight:activeTab===tab.id?700:400,color:activeTab===tab.id?"#E2B96A":"#CBD5E1",borderBottom:activeTab===tab.id?"2px solid #E2B96A":"2px solid transparent",marginBottom:-1,transition:"all 0.2s",whiteSpace:"nowrap"}}>{tab.label}</button>
             ))}
           </div>
 
-          <div className="grid-kpi" style={{borderBottom:"1px solid #1E3A5F"}}>
+          {/* KPI 카드 */}
+          <div className="grid-kpi" style={{borderBottom:"1px solid #2A4A6F"}}>
             {[
-              {label:"Top 3 집중도",value:top3Weight.toFixed(1)+"%",sub:"NVDA · AAPL · MSFT"},
-              {label:"IT 섹터 비중",value:itWeight.toFixed(1)+"%",sub:"전체 섹터 중 최고"},
-              {label:"신규 진입",value:newEntries.length+"개",sub:newEntries.length?newEntries.slice(0,3).join(", "):"변동 없음"},
-              {label:"이탈 종목",value:exited.length+"개",sub:exited.length?exited.slice(0,3).join(", "):"변동 없음"},
+              {label:"Top 3 집중도",value:top3Weight.toFixed(1)+"%",sub:"NVDA · AAPL · MSFT",color:"#E2B96A"},
+              {label:"IT 섹터 비중",value:itWeight.toFixed(1)+"%",sub:"전체 섹터 중 최고",color:"#3B82F6"},
+              {label:"신규 진입",value:newEntries.length+"개",sub:newEntries.length?newEntries.slice(0,3).join(", "):"변동 없음",color:"#10B981"},
+              {label:"이탈 종목",value:exited.length+"개",sub:exited.length?exited.slice(0,3).join(", "):"변동 없음",color:"#EF4444"},
             ].map((c,i) => (
-              <div key={i} style={{padding:"16px 20px",borderRight:i%2===0?"1px solid #1E3A5F":"none",background:"rgba(14,28,46,0.3)"}}>
-                <div style={{fontSize:10,color:"#4A6580",letterSpacing:1.5,textTransform:"uppercase",marginBottom:6}}>{c.label}</div>
-                <div style={{fontSize:22,fontWeight:700,color:"#E2B96A"}}>{c.value}</div>
-                <div style={{fontSize:10,color:"#4A6580",marginTop:3}}>{c.sub}</div>
+              <div key={i} style={{padding:"20px 24px",borderRight:i%2===0?"1px solid #2A4A6F":"none",background:"rgba(14,28,46,0.4)"}}>
+                <div style={{fontSize:11,color:"#94A3B8",letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>{c.label}</div>
+                <div style={{fontSize:28,fontWeight:800,color:c.color,letterSpacing:-0.5}}>{c.value}</div>
+                <div style={{fontSize:12,color:"#CBD5E1",marginTop:5}}>{c.sub}</div>
               </div>
             ))}
           </div>
 
           <div className="content-pad">
 
+            {/* ── 탭1: 오늘 스냅샷 ── */}
             {activeTab==="overview" && (
               <div className="grid-2">
                 <div style={card}>
-                  <div style={{fontSize:13,color:"#E2B96A",letterSpacing:2,marginBottom:20}}>▸ TOP 10 종목 비중</div>
+                  <div style={{fontSize:14,color:"#E2B96A",fontWeight:700,letterSpacing:1,marginBottom:20}}>▸ TOP 10 종목 비중</div>
                   <ResponsiveContainer width="100%" height={320}>
                     <BarChart data={top10} layout="vertical" margin={{left:8,right:24}}>
-                      <XAxis type="number" tick={{fill:"#4A6580",fontSize:11}} axisLine={false} tickLine={false}/>
-                      <YAxis type="category" dataKey="ticker" tick={{fill:"#94A3B8",fontSize:12,fontWeight:600}} axisLine={false} tickLine={false} width={50}/>
+                      <XAxis type="number" tick={{fill:"#94A3B8",fontSize:11}} axisLine={false} tickLine={false}/>
+                      <YAxis type="category" dataKey="ticker" tick={{fill:"#FFFFFF",fontSize:12,fontWeight:700}} axisLine={false} tickLine={false} width={52}/>
                       <Tooltip content={<BarTooltip/>}/>
-                      <Bar dataKey="weight" radius={[0,4,4,0]}>
+                      <Bar dataKey="weight" radius={[0,5,5,0]}>
                         {top10.map((_,i) => <Cell key={i} fill={i===0?"#E2B96A":i<3?"#3B82F6":"#1E3A5F"}/>)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{...card,overflowY:"auto",maxHeight:420}}>
-                  <div style={{fontSize:13,color:"#E2B96A",letterSpacing:2,marginBottom:16}}>▸ TOP 30 전체 목록</div>
+
+                <div style={{...card,overflowY:"auto",maxHeight:430}}>
+                  <div style={{fontSize:14,color:"#E2B96A",fontWeight:700,letterSpacing:1,marginBottom:16}}>▸ TOP 30 전체 목록</div>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                     <thead>
-                      <tr style={{color:"#4A6580",borderBottom:"1px solid #1E3A5F"}}>
-                        <th style={{padding:"6px 8px",textAlign:"left",fontWeight:400}}>#</th>
-                        <th style={{padding:"6px 8px",textAlign:"left",fontWeight:400}}>티커</th>
-                        <th className="hide-mobile" style={{padding:"6px 8px",textAlign:"left",fontWeight:400}}>종목명</th>
-                        <th className="hide-mobile" style={{padding:"6px 8px",textAlign:"left",fontWeight:400}}>섹터</th>
-                        <th style={{padding:"6px 8px",textAlign:"left",fontWeight:400}}>비중</th>
-                        <th style={{padding:"6px 8px",textAlign:"left",fontWeight:400}}>변동</th>
+                      <tr style={{borderBottom:"1px solid #2A4A6F"}}>
+                        {["#","티커","종목명","섹터","비중","변동"].map(h => (
+                          <th key={h} className={h==="종목명"||h==="섹터"?"hide-mobile":""} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:"#CBD5E1",fontSize:11,letterSpacing:1}}>{h}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
                       {withChanges.map((d,i) => {
-                        const rc=d.rankChange; const sc=SECTOR_COLORS[d.sector]||"#4A6580";
+                        const rc=d.rankChange; const sc=SECTOR_COLORS[d.sectorKo]||"#4A6580";
                         return (
-                          <tr key={d.ticker} style={{borderBottom:"1px solid rgba(30,58,95,0.4)",background:i%2===0?"transparent":"rgba(14,28,46,0.3)"}}>
-                            <td style={{padding:"7px 8px",color:"#4A6580"}}>{d.rank}</td>
-                            <td style={{padding:"7px 8px",color:"#E2B96A",fontWeight:700}}>{d.ticker}</td>
-                            <td className="hide-mobile" style={{padding:"7px 8px",color:"#94A3B8"}}>{d.name}</td>
-                            <td className="hide-mobile" style={{padding:"7px 8px"}}><span style={{background:sc+"20",color:sc,padding:"2px 6px",borderRadius:4,fontSize:10}}>{d.sector}</span></td>
-                            <td style={{padding:"7px 8px",color:"#F1F5F9",fontWeight:600}}>{Number(d.weight).toFixed(2)}%</td>
-                            <td style={{padding:"7px 8px",fontWeight:700,color:rc===null?"#4A6580":rc>0?"#10B981":rc<0?"#EF4444":"#4A6580"}}>
+                          <tr key={d.ticker} style={{borderBottom:"1px solid rgba(42,74,111,0.4)",background:i%2===0?"transparent":"rgba(14,28,46,0.4)"}}>
+                            <td style={{padding:"8px 8px",color:"#94A3B8",fontSize:12}}>{d.rank}</td>
+                            <td style={{padding:"8px 8px",color:"#E2B96A",fontWeight:800,fontSize:13}}>{d.ticker}</td>
+                            <td className="hide-mobile" style={{padding:"8px 8px",color:"#E2E8F0",fontSize:12}}>{d.name}</td>
+                            <td className="hide-mobile" style={{padding:"8px 8px"}}>
+                              <span style={{background:sc+"25",color:sc,padding:"3px 8px",borderRadius:5,fontSize:11,fontWeight:600}}>{d.sectorKo}</span>
+                            </td>
+                            <td style={{padding:"8px 8px",color:"#FFFFFF",fontWeight:700,fontSize:13}}>{Number(d.weight).toFixed(2)}%</td>
+                            <td style={{padding:"8px 8px",fontWeight:800,fontSize:13,color:rc===null?"#94A3B8":rc>0?"#10B981":rc<0?"#EF4444":"#94A3B8"}}>
                               {rc===null?"NEW":rc>0?"▲"+rc:rc<0?"▼"+Math.abs(rc):"─"}
                             </td>
                           </tr>
@@ -233,30 +263,37 @@
               </div>
             )}
 
+            {/* ── 탭2: 섹터 구성 ── */}
             {activeTab==="sector" && (
               <div className="grid-equal">
                 <div style={card}>
-                  <div style={{fontSize:13,color:"#E2B96A",letterSpacing:2,marginBottom:20}}>▸ 섹터별 비중 (%)</div>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <div style={{fontSize:14,color:"#E2B96A",fontWeight:700,letterSpacing:1,marginBottom:20}}>▸ 섹터별 비중 (%)</div>
+                  <ResponsiveContainer width="100%" height={320}>
                     <PieChart>
-                      <Pie data={sectorData} cx="50%" cy="50%" innerRadius={60} outerRadius={110} paddingAngle={3} dataKey="value"
-                        label={({name,value}) => name.split(" ")[0]+" "+value+"%"} labelLine={{stroke:"#1E3A5F"}}>
+                      <Pie data={sectorData} cx="50%" cy="50%" innerRadius={65} outerRadius={115} paddingAngle={3} dataKey="value"
+                        label={({name,value}) => name+" "+value+"%"}
+                        labelLine={{stroke:"#3A5A7F"}}>
                         {sectorData.map((e,i) => <Cell key={i} fill={SECTOR_COLORS[e.name]||"#4A6580"}/>)}
                       </Pie>
-                      <Tooltip formatter={v => [v+"%","비중"]} contentStyle={{background:"#0F1923",border:"1px solid #1E3A5F",borderRadius:8}}/>
+                      <Tooltip formatter={v => [v+"%","비중"]} contentStyle={{background:"#0F1923",border:"1px solid #2A4A6F",borderRadius:8,color:"#fff"}}/>
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+
                 <div style={card}>
-                  <div style={{fontSize:13,color:"#E2B96A",letterSpacing:2,marginBottom:20}}>▸ 섹터 순위</div>
-                  {sectorData.map(s => (
-                    <div key={s.name} style={{marginBottom:12}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                        <span style={{fontSize:12,color:"#94A3B8"}}><span style={{color:SECTOR_COLORS[s.name]||"#4A6580",marginRight:6}}>●</span>{s.name}</span>
-                        <span style={{fontSize:12,fontWeight:700,color:"#E2B96A"}}>{s.value}%</span>
+                  <div style={{fontSize:14,color:"#E2B96A",fontWeight:700,letterSpacing:1,marginBottom:20}}>▸ 섹터 순위</div>
+                  {sectorData.map((s,i) => (
+                    <div key={s.name} style={{marginBottom:14}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:12,color:"#94A3B8",minWidth:20,fontWeight:600}}>#{i+1}</span>
+                          <span style={{color:SECTOR_COLORS[s.name]||"#4A6580",fontSize:16}}>●</span>
+                          <span style={{fontSize:13,color:"#FFFFFF",fontWeight:600}}>{s.name}</span>
+                        </div>
+                        <span style={{fontSize:15,fontWeight:800,color:SECTOR_COLORS[s.name]||"#E2B96A"}}>{s.value}%</span>
                       </div>
-                      <div style={{background:"#0F1923",borderRadius:4,height:5}}>
-                        <div style={{width:((s.value/sectorData[0].value)*100)+"%",height:"100%",borderRadius:4,background:SECTOR_COLORS[s.name]||"#4A6580",transition:"width 0.5s"}}/>
+                      <div style={{background:"#0B1623",borderRadius:6,height:7}}>
+                        <div style={{width:((s.value/sectorData[0].value)*100)+"%",height:"100%",borderRadius:6,background:SECTOR_COLORS[s.name]||"#4A6580",transition:"width 0.6s ease",boxShadow:"0 0 6px "+(SECTOR_COLORS[s.name]||"#4A6580")+"80"}}/>
                       </div>
                     </div>
                   ))}
@@ -264,64 +301,25 @@
               </div>
             )}
 
-            {activeTab==="trend" && (
-              <div className="grid-equal">
-                <div style={card}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-                    <div style={{fontSize:13,color:"#E2B96A",letterSpacing:2}}>▸ 비중 추이</div>
-                    <select value={selTicker} onChange={e => setSelTicker(e.target.value)} style={{background:"#0F1923",border:"1px solid #1E3A5F",color:"#E2B96A",borderRadius:6,padding:"4px 8px",fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>
-                      {todayData.map(d => <option key={d.ticker} value={d.ticker}>{d.ticker}</option>)}
-                    </select>
-                  </div>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <AreaChart data={trendData}>
-                      <defs>
-                        <linearGradient id="wGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1E3A5F"/>
-                      <XAxis dataKey="date" tick={{fill:"#4A6580",fontSize:10}}/>
-                      <YAxis tick={{fill:"#4A6580",fontSize:10}}/>
-                      <Tooltip contentStyle={{background:"#0F1923",border:"1px solid #1E3A5F",borderRadius:8}} formatter={v => [v+"%","비중"]}/>
-                      <Area type="monotone" dataKey="weight" stroke="#3B82F6" fill="url(#wGrad)" strokeWidth={2} dot={{fill:"#E2B96A",r:4}}/>
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={card}>
-                  <div style={{fontSize:13,color:"#E2B96A",letterSpacing:2,marginBottom:20}}>▸ 순위 추이 — {selTicker}</div>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1E3A5F"/>
-                      <XAxis dataKey="date" tick={{fill:"#4A6580",fontSize:10}}/>
-                      <YAxis reversed tick={{fill:"#4A6580",fontSize:10}}/>
-                      <Tooltip contentStyle={{background:"#0F1923",border:"1px solid #1E3A5F",borderRadius:8}} formatter={v => [v+"위","순위"]}/>
-                      <Line type="monotone" dataKey="rank" stroke="#E2B96A" strokeWidth={2} dot={{fill:"#E2B96A",r:5}}/>
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
+            {/* ── 탭3: 신규진입·이탈 ── */}
             {activeTab==="changes" && (
               <div className="grid-equal">
                 {[
                   {label:"신규 진입 종목",tickers:newEntries,color:"#10B981",icon:"▲",dateRef:currentDate},
                   {label:"이탈 종목",tickers:exited,color:"#EF4444",icon:"▼",dateRef:prevDate},
                 ].map(({label,tickers,color,icon,dateRef}) => (
-                  <div key={label} style={{...card,border:"1px solid "+color+"30"}}>
-                    <div style={{fontSize:13,color:color,letterSpacing:2,marginBottom:20}}>{icon} {label}</div>
+                  <div key={label} style={{...card,border:"1px solid "+color+"40"}}>
+                    <div style={{fontSize:14,color:color,fontWeight:700,letterSpacing:1,marginBottom:20}}>{icon} {label}</div>
                     {tickers.length===0
-                      ? <div style={{color:"#4A6580",fontSize:14,padding:"20px 0"}}>변동 없음</div>
+                      ? <div style={{color:"#CBD5E1",fontSize:14,padding:"20px 0"}}>변동 없음</div>
                       : tickers.map(ticker => {
                           const d = allData.find(x => x.ticker===ticker&&x.date===dateRef);
                           return (
-                            <div key={ticker} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:8,marginBottom:8,background:color+"10",border:"1px solid "+color+"20"}}>
-                              <span style={{color:color,fontWeight:900,fontSize:16,minWidth:52}}>{ticker}</span>
+                            <div key={ticker} style={{display:"flex",alignItems:"center",gap:14,padding:"12px 16px",borderRadius:10,marginBottom:10,background:color+"15",border:"1px solid "+color+"30"}}>
+                              <span style={{color:color,fontWeight:900,fontSize:18,minWidth:56}}>{ticker}</span>
                               <div>
-                                <div style={{color:"#E2E8F0",fontSize:12}}>{d?d.name:"-"}</div>
-                                <div style={{color:"#4A6580",fontSize:11}}>{d?d.sector:"-"} · {d?d.weight.toFixed(2):"-"}%</div>
+                                <div style={{color:"#FFFFFF",fontSize:13,fontWeight:600}}>{d?d.name:"-"}</div>
+                                <div style={{color:"#CBD5E1",fontSize:12,marginTop:3}}>{d?toKo(d.sector):"-"} · {d?d.weight.toFixed(2):"-"}%</div>
                               </div>
                             </div>
                           );
@@ -329,15 +327,16 @@
                     }
                   </div>
                 ))}
+
                 <div style={{...card,gridColumn:"1 / -1"}}>
-                  <div style={{fontSize:13,color:"#E2B96A",letterSpacing:2,marginBottom:20}}>▸ 순위 변동 TOP 5</div>
+                  <div style={{fontSize:14,color:"#E2B96A",fontWeight:700,letterSpacing:1,marginBottom:20}}>▸ 순위 변동 TOP 5</div>
                   <div className="grid-top5">
                     {withChanges.filter(d => d.rankChange!==null&&d.rankChange!==0).sort((a,b) => Math.abs(b.rankChange)-Math.abs(a.rankChange)).slice(0,5).map(d => (
-                      <div key={d.ticker} style={{background:d.rankChange>0?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:"1px solid "+(d.rankChange>0?"#10B981":"#EF4444")+"30",borderRadius:10,padding:14,textAlign:"center"}}>
-                        <div style={{color:"#E2B96A",fontWeight:900,fontSize:18}}>{d.ticker}</div>
-                        <div className="hide-mobile" style={{color:"#4A6580",fontSize:11,margin:"4px 0 8px"}}>{d.name}</div>
-                        <div style={{fontSize:22,fontWeight:900,color:d.rankChange>0?"#10B981":"#EF4444"}}>{d.rankChange>0?"▲"+d.rankChange:"▼"+Math.abs(d.rankChange)}</div>
-                        <div style={{color:"#4A6580",fontSize:11,marginTop:4}}>{d.prevRank}위→{d.rank}위</div>
+                      <div key={d.ticker} style={{background:d.rankChange>0?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",border:"1px solid "+(d.rankChange>0?"#10B981":"#EF4444")+"40",borderRadius:12,padding:16,textAlign:"center"}}>
+                        <div style={{color:"#E2B96A",fontWeight:900,fontSize:20}}>{d.ticker}</div>
+                        <div className="hide-mobile" style={{color:"#CBD5E1",fontSize:12,margin:"5px 0 10px",fontWeight:500}}>{d.name}</div>
+                        <div style={{fontSize:26,fontWeight:900,color:d.rankChange>0?"#10B981":"#EF4444"}}>{d.rankChange>0?"▲"+d.rankChange:"▼"+Math.abs(d.rankChange)}</div>
+                        <div style={{color:"#CBD5E1",fontSize:12,marginTop:6,fontWeight:500}}>{d.prevRank}위 → {d.rank}위</div>
                       </div>
                     ))}
                   </div>
@@ -346,7 +345,7 @@
             )}
           </div>
 
-          <div className="footer-pad" style={{borderTop:"1px solid #1E3A5F",fontSize:11,color:"#2A3F55"}}>
+          <div className="footer-pad" style={{borderTop:"1px solid #2A4A6F",fontSize:11,color:"#64748B"}}>
             <span>iShares Russell Top 200 ETF · {currentDate}</span>
             <span>마지막 로드: {lastUpdated||"-"} · 매일 오후 4시 자동 갱신</span>
           </div>
