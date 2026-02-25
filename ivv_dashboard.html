@@ -122,7 +122,7 @@
       if (value === null || value === undefined) return (
         <div style={{background:"rgba(14,28,46,0.7)",border:"1px solid #2A4A6F",borderRadius:12,padding:"14px 10px",textAlign:"center"}}>
           <div style={{fontSize:11,color:"#94A3B8",marginBottom:4,letterSpacing:1}}>{label}</div>
-          <div style={{fontSize:9,color:"#4A6580",marginBottom:6}}>{dateRange||""}</div>
+          <div style={{fontSize:10,color:"#94A3B8",fontWeight:600,marginBottom:6}}>{dateRange||""}</div>
           <div style={{fontSize:18,fontWeight:700,color:"#4A6580"}}>-</div>
         </div>
       );
@@ -130,7 +130,7 @@
       return (
         <div style={{background:isPos?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:"1px solid "+(isPos?"#10B981":"#EF4444")+"40",borderRadius:12,padding:"14px 10px",textAlign:"center"}}>
           <div style={{fontSize:11,color:"#94A3B8",marginBottom:4,letterSpacing:1}}>{label}</div>
-          <div style={{fontSize:9,color:"#4A6580",marginBottom:6}}>{dateRange||""}</div>
+          <div style={{fontSize:10,color:"#94A3B8",fontWeight:600,marginBottom:6}}>{dateRange||""}</div>
           <div style={{fontSize:20,fontWeight:800,color:isPos?"#10B981":"#EF4444"}}>
             {isPos?"+":""}{value}%
           </div>
@@ -430,7 +430,7 @@
                             <div key={label} style={{background:"rgba(0,0,0,0.25)",borderRadius:6,padding:"8px 10px"}}>
                               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                                 <span style={{fontSize:11,color:"#94A3B8",fontWeight:700}}>{label}</span>
-                                <span style={{fontSize:9,color:"#4A6580"}}>{getDateRange(days)}</span>
+                                <span style={{fontSize:10,color:"#94A3B8",fontWeight:600}}>{getDateRange(days)}</span>
                               </div>
                               <span style={{color:val===null?"#4A6580":pos?"#10B981":"#EF4444",fontWeight:800,fontSize:15}}>
                                 {val===null?"-":(pos?"+":"")+val+"%"}
