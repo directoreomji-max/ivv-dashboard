@@ -11,439 +11,414 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #060D14; }
+    body { background: #060D14; font-family: 'Courier New', monospace; }
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #0B1623; }
     ::-webkit-scrollbar-thumb { background: #3A5A7F; border-radius: 3px; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1.3fr; gap: 24px; }
-    .grid-equal { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-    .grid-kpi { display: grid; grid-template-columns: repeat(4,1fr); }
-    .header-inner { display: flex; align-items: center; justify-content: space-between; }
-    .header-right { display: flex; align-items: center; gap: 10px; }
-    .content-pad { padding: 28px 32px; }
-    .header-pad { padding: 18px 32px; }
-    .tab-pad { padding: 0 32px; }
-    .footer-pad { padding: 14px 32px; display: flex; justify-content: space-between; align-items: center; }
-    @media (max-width: 768px) {
-      .grid-2 { grid-template-columns: 1fr; }
-      .grid-equal { grid-template-columns: 1fr; }
-      .grid-kpi { grid-template-columns: repeat(2,1fr); }
-      .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
-      .header-right { width: 100%; justify-content: space-between; }
-      .content-pad { padding: 16px; }
-      .header-pad { padding: 14px 16px; }
-      .tab-pad { padding: 0 8px; }
-      .footer-pad { padding: 12px 16px; flex-direction: column; gap: 4px; text-align: center; }
-      .hide-mobile { display: none; }
-    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .fade-in { animation: fadeIn 0.4s ease forwards; }
   </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
-    const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = Recharts;
+    const { useState, useEffect, useMemo } = React;
+    const {
+      LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+      BarChart, Bar, Cell, ReferenceLine
+    } = Recharts;
 
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxb2syQZzhFMQI_pBvteCJ75-ZCLFvPVeb1jFR71rrps9TiK-NVWL0iMO9HdViG6N-7/exec";
-    const CLAUDE_API = "https://api.anthropic.com/v1/messages";
-
-    const SECTOR_COLORS = {
-      "전기·전자":"#3B82F6","기타금융":"#10B981","운송장비·부품":"#F59E0B",
-      "기계·장비":"#8B5CF6","제약":"#EF4444","보험":"#06B6D4",
-      "유통":"#F97316","코스닥 기계·장비":"#84CC16","코스닥 제약":"#EC4899",
-      "반도체":"#3B82F6","IT서비스":"#8B5CF6","기타":"#4A6580",
-    };
-
-    const card = {background:"rgba(14,28,46,0.7)",border:"1px solid #2A4A6F",borderRadius:14,padding:24};
     const GOLD = "#E2B96A";
 
-    const BarTooltipKR = ({active,payload}) => {
-      if (!active||!payload||!payload.length) return null;
-      const d = payload[0].payload;
-      return (
-        <div style={{background:"#0F1923",border:"1px solid #3A5A7F",borderRadius:8,padding:"10px 14px"}}>
-          <div style={{color:GOLD,fontWeight:700,fontSize:15}}>{d.name}</div>
-          <div style={{color:"#fff",fontWeight:600,marginTop:4}}>{Number(d.weight).toFixed(2)}%</div>
-        </div>
-      );
+    const STOCK_COLORS = {
+      "삼성전자":           "#3B82F6",
+      "SK하이닉스":         "#8B5CF6",
+      "KB금융":             "#10B981",
+      "한화에어로스페이스":  "#F59E0B",
+      "삼성물산":           "#EF4444",
+      "HD한국조선해양":     "#06B6D4",
+      "두산에너빌리티":     "#F97316",
+      "LG에너지솔루션":     "#84CC16",
+      "삼성바이오로직스":   "#EC4899",
     };
 
-    function RetBadge({val, size=16}) {
-      if (val===null||val===undefined) return <span style={{color:"#4A6580"}}>-</span>;
-      const pos = val >= 0;
-      return <span style={{color:pos?"#10B981":"#EF4444",fontWeight:800,fontSize:size}}>{pos?"+":""}{val}%</span>;
+    const card = { background:"rgba(14,28,46,0.7)", border:"1px solid #2A4A6F", borderRadius:14, padding:20 };
+
+    function parseNum(v) {
+      if (v === null || v === undefined || v === "") return null;
+      if (typeof v === "number") return v;
+      return parseFloat(String(v).replace(/[,\+%]/g,"")) || null;
     }
 
-    function PDFUploader({ onParsed }) {
-      const [parsing, setParsing] = useState(false);
-      const [error, setError] = useState(null);
-      const fileRef = useRef();
+    function RateBadge({ val, size=14 }) {
+      const n = parseNum(val);
+      if (n === null) return <span style={{color:"#4A6580"}}>-</span>;
+      const pos = n >= 0;
+      return <span style={{color:pos?"#10B981":"#EF4444", fontWeight:800, fontSize:size}}>{pos?"▲":"▼"} {Math.abs(n).toFixed(2)}%</span>;
+    }
 
-      async function handleFile(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        setParsing(true);
-        setError(null);
-
-        try {
-          // PDF를 base64로 변환
-          const base64 = await new Promise((res, rej) => {
-            const r = new FileReader();
-            r.onload = () => res(r.result.split(",")[1]);
-            r.onerror = () => rej(new Error("읽기 실패"));
-            r.readAsDataURL(file);
-          });
-
-          // Claude API로 파싱
-          const response = await fetch(CLAUDE_API, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 1000,
-              messages: [{
-                role: "user",
-                content: [
-                  {
-                    type: "document",
-                    source: { type: "base64", media_type: "application/pdf", data: base64 }
-                  },
-                  {
-                    type: "text",
-                    text: `이 자산운용보고서 PDF에서 다음 정보를 JSON으로만 추출해줘. 다른 말 하지 말고 JSON만 출력해:
-{
-  "quarter": "2025-4Q",
-  "nav": 1725.69,
-  "ret3m": 20.89,
-  "ret6m": 33.41,
-  "ret9m": 73.43,
-  "ret1y": 82.42,
-  "holdings": [
-    {"rank": 1, "name": "삼성전자", "ticker": "005930", "sector": "코스피 전기·전자", "weight": 19.41},
-    ...
-  ]
-}
-quarter는 운용기간 마지막 분기로. holdings는 보유종목 상위 10개만.`
-                  }
-                ]
-              }]
-            })
-          });
-
-          const data = await response.json();
-          const text = data.content[0].text;
-          const clean = text.replace(/```json|```/g, "").trim();
-          const parsed = JSON.parse(clean);
-          onParsed(parsed);
-        } catch(err) {
-          setError("파싱 실패: " + err.message);
-        } finally {
-          setParsing(false);
-        }
-      }
-
+    function ChartTooltip({ active, payload, label }) {
+      if (!active || !payload || !payload.length) return null;
       return (
-        <div style={{...card, border:"2px dashed #E2B96A", textAlign:"center", padding:40}}>
-          <div style={{fontSize:40, marginBottom:16}}>📄</div>
-          <div style={{color:GOLD, fontWeight:700, fontSize:18, marginBottom:8}}>자산운용보고서 PDF 업로드</div>
-          <div style={{color:"#94A3B8", fontSize:13, marginBottom:24}}>분기별 보고서를 올리면 자동으로 종목 데이터를 읽어와요</div>
-          {parsing ? (
-            <div style={{color:GOLD, fontSize:14}}>⏳ AI가 PDF 분석 중...</div>
-          ) : (
-            <button onClick={() => fileRef.current.click()} style={{
-              background:"linear-gradient(135deg,#E2B96A,#C8962E)",
-              border:"none", borderRadius:10, padding:"12px 32px",
-              color:"#060D14", fontWeight:800, fontSize:15, cursor:"pointer", fontFamily:"inherit",
-            }}>PDF 선택하기</button>
-          )}
-          {error && <div style={{color:"#EF4444", fontSize:13, marginTop:12}}>{error}</div>}
-          <input ref={fileRef} type="file" accept=".pdf" onChange={handleFile} style={{display:"none"}} />
+        <div style={{background:"#0F1923",border:"1px solid #3A5A7F",borderRadius:8,padding:"10px 14px",fontSize:12}}>
+          <div style={{color:"#94A3B8",marginBottom:6}}>{label}</div>
+          {payload.map(p => (
+            <div key={p.dataKey} style={{color:p.color,fontWeight:700,marginBottom:2}}>
+              {p.dataKey}: {typeof p.value==="number" ? p.value.toFixed(2)+"%" : p.value}
+            </div>
+          ))}
         </div>
       );
     }
 
-    function PreviewAndSave({ parsed, onSave, onCancel }) {
-      const [saving, setSaving] = useState(false);
+    function App() {
+      const [rawData, setRawData]     = useState([]);
+      const [loading, setLoading]     = useState(true);
+      const [error, setError]         = useState(null);
+      const [activeTab, setActiveTab] = useState("overview");
+      const [selectedStock, setSelectedStock] = useState(null);
+      const [dateRange, setDateRange] = useState("1M");
+      const [editMode, setEditMode]   = useState(false);
+      const [customStocks, setCustomStocks] = useState(null);
 
-      async function handleSave() {
-        setSaving(true);
-        try {
-          await fetch(APPS_SCRIPT_URL, {
-            method: "POST",
-            body: JSON.stringify({
-              quarter: parsed.quarter,
-              holdings: parsed.holdings,
-              performance: {
-                nav: parsed.nav,
-                ret3m: parsed.ret3m,
-                ret6m: parsed.ret6m,
-                ret1y: parsed.ret1y,
-              }
-            })
+      useEffect(() => {
+        fetch(APPS_SCRIPT_URL)
+          .then(r => r.json())
+          .then(json => { if (json.success) setRawData(json.data||[]); else setError("데이터 로드 실패"); })
+          .catch(() => setError("서버 연결 실패"))
+          .finally(() => setLoading(false));
+      }, []);
+
+      const stockNames = useMemo(() => {
+        if (customStocks) return customStocks;
+        return [...new Set(rawData.map(d=>d["종목명"]))].filter(Boolean);
+      }, [rawData, customStocks]);
+
+      const filteredData = useMemo(() => {
+        if (!rawData.length) return [];
+        const now = new Date();
+        const cutoff = new Date(now);
+        if      (dateRange==="1W") cutoff.setDate(now.getDate()-7);
+        else if (dateRange==="1M") cutoff.setMonth(now.getMonth()-1);
+        else if (dateRange==="3M") cutoff.setMonth(now.getMonth()-3);
+        else if (dateRange==="6M") cutoff.setMonth(now.getMonth()-6);
+        else cutoff.setFullYear(now.getFullYear()-1);
+        return rawData.filter(d => new Date(d["날짜"]) >= cutoff);
+      }, [rawData, dateRange]);
+
+      const dates = useMemo(() =>
+        [...new Set(filteredData.map(d=>d["날짜"]))].sort()
+      , [filteredData]);
+
+      const latestDate = dates[dates.length-1];
+
+      const returnSeries = useMemo(() => {
+        const series = {};
+        stockNames.forEach(name => {
+          const sd = filteredData.filter(d=>d["종목명"]===name).sort((a,b)=>new Date(a["날짜"])-new Date(b["날짜"]));
+          if (!sd.length) return;
+          const base = parseNum(sd[0]["종가"]);
+          if (!base) return;
+          series[name] = sd.map(d => ({
+            date:   d["날짜"],
+            return: parseNum(d["종가"]) ? +((parseNum(d["종가"])/base-1)*100).toFixed(2) : null,
+            price:  parseNum(d["종가"]),
+            rate:   d["등락률"],
+          }));
+        });
+        return series;
+      }, [filteredData, stockNames]);
+
+      const latestData = useMemo(() =>
+        stockNames.map(name => filteredData.find(d=>d["종목명"]===name&&d["날짜"]===latestDate) || {종목명:name})
+      , [filteredData, stockNames, latestDate]);
+
+      const multiChartData = useMemo(() =>
+        dates.map(date => {
+          const pt = { date: date.slice(5) };
+          stockNames.forEach(name => {
+            const s = returnSeries[name];
+            const f = s?.find(d=>d.date===date);
+            if (f) pt[name] = f.return;
           });
-          onSave();
-        } catch(e) {
-          alert("저장 실패: " + e.message);
-        } finally {
-          setSaving(false);
-        }
-      }
+          return pt;
+        })
+      , [dates, stockNames, returnSeries]);
+
+      const todayBarData = useMemo(() =>
+        latestData.map(d => ({
+          name:  d["종목명"],
+          rate:  parseNum(d["등락률"]),
+          price: parseNum(d["종가"]),
+          diff:  d["전일비"],
+        })).sort((a,b) => (b.rate||0)-(a.rate||0))
+      , [latestData]);
+
+      const selectedSeries = selectedStock ? (returnSeries[selectedStock]||[]) : [];
+
+      // 기간 수익률 정렬용
+      const rankedStocks = useMemo(() =>
+        stockNames.map(name => ({
+          name,
+          ret: returnSeries[name]?.slice(-1)[0]?.return ?? null,
+        })).sort((a,b) => (b.ret||0)-(a.ret||0))
+      , [stockNames, returnSeries]);
+
+      const maxAbsRet = useMemo(() =>
+        Math.max(...rankedStocks.map(s => Math.abs(s.ret||0)), 1)
+      , [rankedStocks]);
+
+      if (loading) return (
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:16,background:"#060D14"}}>
+          <div style={{width:52,height:52,borderRadius:12,background:"linear-gradient(135deg,#E2B96A,#C8962E)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#060D14",animation:"pulse 1.4s infinite",textAlign:"center",lineHeight:1.3}}>가치<br/>주식</div>
+          <div style={{color:"#94A3B8",fontSize:13,letterSpacing:3}}>LOADING...</div>
+        </div>
+      );
+
+      if (error) return (
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#EF4444",fontSize:14,background:"#060D14"}}>⚠ {error}</div>
+      );
+
+      if (!rawData.length) return (
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#94A3B8",fontSize:14,background:"#060D14",flexDirection:"column",gap:12}}>
+          <div style={{fontSize:32}}>📭</div>
+          <div>아직 수집된 데이터가 없어요</div>
+          <div style={{fontSize:12,color:"#4A6580"}}>매일 오후 4시 이후 데이터가 쌓여요</div>
+        </div>
+      );
 
       return (
-        <div>
-          <div style={{...card, marginBottom:20}}>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20}}>
-              <div style={{color:GOLD, fontWeight:700, fontSize:16}}>▸ AI 분석 결과 확인 · {parsed.quarter}</div>
-              <div style={{display:"flex", gap:10}}>
-                <button onClick={onCancel} style={{background:"rgba(14,28,46,0.7)",border:"1px solid #2A4A6F",borderRadius:8,padding:"8px 16px",color:"#CBD5E1",cursor:"pointer",fontFamily:"inherit"}}>취소</button>
-                <button onClick={handleSave} disabled={saving} style={{background:"linear-gradient(135deg,#E2B96A,#C8962E)",border:"none",borderRadius:8,padding:"8px 20px",color:"#060D14",fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>
-                  {saving ? "저장 중..." : "✓ 저장하기"}
-                </button>
+        <div style={{background:"linear-gradient(135deg,#060D14 0%,#0B1623 50%,#0E1C2E 100%)",minHeight:"100vh",color:"#F1F5F9"}}>
+
+          {/* 헤더 */}
+          <div style={{borderBottom:"1px solid #2A4A6F",background:"rgba(14,28,46,0.92)",position:"sticky",top:0,zIndex:100,padding:"16px 28px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#E2B96A,#C8962E)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:10,color:"#060D14",textAlign:"center",lineHeight:1.3}}>메트<br/>라이프</div>
+              <div>
+                <div style={{fontWeight:700,fontSize:15,color:"#FFFFFF"}}>메트라이프 가치주식형 2호</div>
+                <div style={{fontSize:10,color:"#94A3B8",letterSpacing:2}}>HOLDINGS TRACKER · 코스피 TOP9</div>
               </div>
             </div>
-            <div style={{display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:20}}>
-              {[
-                {label:"기준가격", value: parsed.nav ? parsed.nav.toLocaleString() : "-"},
-                {label:"3개월", value: parsed.ret3m ? "+"+parsed.ret3m+"%" : "-", color:"#10B981"},
-                {label:"6개월", value: parsed.ret6m ? "+"+parsed.ret6m+"%" : "-", color:"#10B981"},
-                {label:"1년", value: parsed.ret1y ? "+"+parsed.ret1y+"%" : "-", color:"#10B981"},
-              ].map(item => (
-                <div key={item.label} style={{background:"rgba(6,13,20,0.6)",border:"1px solid #2A4A6F",borderRadius:10,padding:"14px",textAlign:"center"}}>
-                  <div style={{fontSize:11,color:"#94A3B8",marginBottom:6}}>{item.label}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:item.color||GOLD}}>{item.value}</div>
-                </div>
-              ))}
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <button onClick={()=>setEditMode(!editMode)} style={{background:editMode?"rgba(226,185,106,0.2)":"rgba(42,74,111,0.4)",border:"1px solid "+(editMode?GOLD:"#2A4A6F"),borderRadius:6,padding:"5px 12px",fontSize:11,color:editMode?GOLD:"#CBD5E1",cursor:"pointer",fontFamily:"inherit"}}>
+                ✎ 종목 편집
+              </button>
+              <div style={{padding:"5px 10px",borderRadius:6,background:"rgba(16,185,129,0.15)",border:"1px solid rgba(16,185,129,0.4)",fontSize:11,color:"#10B981",fontWeight:700}}>● LIVE</div>
             </div>
-            <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-              <thead>
-                <tr style={{borderBottom:"1px solid #2A4A6F"}}>
-                  {["순위","종목명","업종","비중"].map(h => (
-                    <th key={h} style={{padding:"8px",textAlign:"left",color:"#CBD5E1",fontWeight:600,fontSize:11}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {parsed.holdings.map((h,i) => (
-                  <tr key={i} style={{borderBottom:"1px solid rgba(42,74,111,0.4)",background:i%2===0?"transparent":"rgba(14,28,46,0.4)"}}>
-                    <td style={{padding:"8px",color:"#94A3B8"}}>{h.rank}</td>
-                    <td style={{padding:"8px",color:GOLD,fontWeight:700}}>{h.name}</td>
-                    <td style={{padding:"8px",color:"#CBD5E1"}}>{h.sector}</td>
-                    <td style={{padding:"8px",color:"#FFFFFF",fontWeight:700}}>{h.weight}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      );
-    }
-
-    function Dashboard({ data, quarters }) {
-      const [selQ, setSelQ] = useState(quarters[0]);
-      const [activeTab, setActiveTab] = useState("overview");
-
-      const qData = data.filter(d => d.quarter === selQ);
-      const perf = qData[0] || {};
-      const top10 = qData.slice(0,10).sort((a,b) => b.weight - a.weight);
-
-      // 섹터 집계
-      const sectorMap = {};
-      qData.forEach(d => {
-        const s = (d.sector||"기타").replace("코스피 ","").replace("코스닥 ","");
-        sectorMap[s] = (sectorMap[s]||0) + d.weight;
-      });
-      const sectorData = Object.entries(sectorMap).map(([name,value]) => ({name,value:+value.toFixed(2)})).sort((a,b)=>b.value-a.value);
-
-      return (
-        <div>
-          {/* 날짜 선택 */}
-          <div style={{padding:"10px 32px",borderBottom:"1px solid #2A4A6F",background:"rgba(6,13,20,0.5)",display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:12,color:"#CBD5E1"}}>보고서 기준</span>
-            <select value={selQ} onChange={e=>setSelQ(e.target.value)} style={{background:"#0F1923",border:"1px solid #2A4A6F",color:GOLD,borderRadius:6,padding:"5px 10px",fontSize:13,fontFamily:"inherit",cursor:"pointer"}}>
-              {quarters.map(q => <option key={q} value={q}>{q}</option>)}
-            </select>
           </div>
 
-          {/* 수익률 배너 */}
-          <div style={{padding:"16px 32px",borderBottom:"1px solid #2A4A6F",background:"rgba(6,13,20,0.6)"}}>
-            <div style={{fontSize:11,color:"#94A3B8",letterSpacing:2,marginBottom:12}}>
-              가치주식형 2호 수익률 · 기준가격 <span style={{color:GOLD,fontWeight:700,fontSize:14}}>{perf.nav ? Number(perf.nav).toLocaleString() : "-"}</span>
+          {/* 편집 패널 */}
+          {editMode && (
+            <div style={{background:"rgba(226,185,106,0.08)",borderBottom:"1px solid rgba(226,185,106,0.3)",padding:"16px 28px"}}>
+              <div style={{fontSize:12,color:GOLD,marginBottom:10,fontWeight:700}}>▸ 추적 종목 편집 (쉼표로 구분)</div>
+              <textarea
+                defaultValue={stockNames.join(", ")}
+                onChange={e=>setCustomStocks(e.target.value.split(",").map(s=>s.trim()).filter(Boolean))}
+                style={{width:"100%",background:"#0F1923",border:"1px solid #3A5A7F",borderRadius:8,padding:"10px 14px",color:"#FFFFFF",fontSize:12,fontFamily:"inherit",resize:"vertical",minHeight:56}}
+              />
+              <div style={{fontSize:11,color:"#94A3B8",marginTop:6}}>※ KOSPI_200 시트에 있는 종목명과 정확히 일치해야 해요</div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-              {[
-                {label:"3개월", value:perf.ret3m},
-                {label:"6개월", value:perf.ret6m},
-                {label:"1년", value:perf.ret1y},
-              ].map(item => {
-                const pos = item.value >= 0;
+          )}
+
+          {/* 오늘 현황 배너 */}
+          <div style={{padding:"16px 28px",borderBottom:"1px solid #2A4A6F",background:"rgba(6,13,20,0.5)"}}>
+            <div style={{fontSize:10,color:"#94A3B8",letterSpacing:2,marginBottom:10}}>TODAY · {latestDate||"-"}</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(138px,1fr))",gap:8}}>
+              {todayBarData.map(d => {
+                const pos = (d.rate||0) >= 0;
                 return (
-                  <div key={item.label} style={{background:pos?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:"1px solid "+(pos?"#10B981":"#EF4444")+"40",borderRadius:12,padding:"14px",textAlign:"center"}}>
-                    <div style={{fontSize:11,color:"#94A3B8",marginBottom:6}}>{item.label}</div>
-                    <div style={{fontSize:22,fontWeight:800,color:pos?"#10B981":"#EF4444"}}>
-                      {item.value ? (pos?"+":"")+item.value+"%" : "-"}
-                    </div>
+                  <div key={d.name} onClick={()=>{setSelectedStock(d.name);setActiveTab("detail");}}
+                    style={{background:pos?"rgba(16,185,129,0.07)":"rgba(239,68,68,0.07)",border:"1px solid "+(pos?"rgba(16,185,129,0.3)":"rgba(239,68,68,0.3)"),borderRadius:10,padding:"10px 12px",cursor:"pointer"}}>
+                    <div style={{fontSize:11,color:"#FFFFFF",fontWeight:700,marginBottom:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.name}</div>
+                    <div style={{fontSize:12,color:"#94A3B8",marginBottom:3}}>{d.price?d.price.toLocaleString():"-"}원</div>
+                    <RateBadge val={d.rate} size={12}/>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* 탭 */}
-          <div className="tab-pad" style={{display:"flex",borderBottom:"1px solid #2A4A6F",background:"rgba(6,13,20,0.7)"}}>
-            {[{id:"overview",label:"보유종목"},{id:"sector",label:"섹터 구성"}].map(tab => (
-              <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{background:"none",border:"none",cursor:"pointer",padding:"14px 20px",fontSize:14,fontFamily:"inherit",fontWeight:activeTab===tab.id?700:400,color:activeTab===tab.id?GOLD:"#CBD5E1",borderBottom:activeTab===tab.id?"2px solid "+GOLD:"2px solid transparent",marginBottom:-1,transition:"all 0.2s"}}>{tab.label}</button>
-            ))}
+          {/* 탭 + 날짜범위 */}
+          <div style={{padding:"0 28px",borderBottom:"1px solid #2A4A6F",background:"rgba(6,13,20,0.7)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex"}}>
+              {[
+                {id:"overview", label:"수익률 비교"},
+                {id:"today",    label:"오늘 등락"},
+                {id:"detail",   label: selectedStock ? `${selectedStock} 상세` : "종목 상세"},
+              ].map(tab => (
+                <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{background:"none",border:"none",cursor:"pointer",padding:"13px 16px",fontSize:12,fontFamily:"inherit",fontWeight:activeTab===tab.id?700:400,color:activeTab===tab.id?GOLD:"#CBD5E1",borderBottom:activeTab===tab.id?"2px solid "+GOLD:"2px solid transparent",marginBottom:-1,transition:"all 0.2s"}}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:5}}>
+              {["1W","1M","3M","6M","1Y"].map(r => (
+                <button key={r} onClick={()=>setDateRange(r)} style={{background:dateRange===r?"rgba(226,185,106,0.2)":"transparent",border:"1px solid "+(dateRange===r?GOLD:"#2A4A6F"),borderRadius:6,padding:"4px 9px",fontSize:11,color:dateRange===r?GOLD:"#94A3B8",cursor:"pointer",fontFamily:"inherit",fontWeight:dateRange===r?700:400}}>
+                  {r}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="content-pad">
+          {/* 컨텐츠 */}
+          <div style={{padding:"24px 28px"}}>
+
+            {/* ── 수익률 비교 ── */}
             {activeTab==="overview" && (
-              <div className="grid-2">
-                <div style={card}>
-                  <div style={{fontSize:14,color:GOLD,fontWeight:700,letterSpacing:1,marginBottom:20}}>▸ TOP 10 종목 비중</div>
-                  <ResponsiveContainer width="100%" height={320}>
-                    <BarChart data={top10} layout="vertical" margin={{left:8,right:24}}>
-                      <XAxis type="number" tick={{fill:"#94A3B8",fontSize:11}} axisLine={false} tickLine={false}/>
-                      <YAxis type="category" dataKey="name" tick={{fill:"#FFFFFF",fontSize:11,fontWeight:700}} axisLine={false} tickLine={false} width={80}/>
-                      <Tooltip content={<BarTooltipKR/>}/>
-                      <Bar dataKey="weight" radius={[0,5,5,0]}>
-                        {top10.map((_,i) => <Cell key={i} fill={i===0?GOLD:i<3?"#3B82F6":"#1E3A5F"}/>)}
-                      </Bar>
-                    </BarChart>
+              <div className="fade-in">
+                <div style={{...card, marginBottom:20}}>
+                  <div style={{fontSize:13,color:GOLD,fontWeight:700,letterSpacing:1,marginBottom:16}}>▸ 기간 수익률 추이 ({dateRange})</div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={multiChartData} margin={{left:0,right:20,top:10}}>
+                      <XAxis dataKey="date" tick={{fill:"#94A3B8",fontSize:10}} axisLine={false} tickLine={false} interval="preserveStartEnd"/>
+                      <YAxis tick={{fill:"#94A3B8",fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>v+"%"}/>
+                      <Tooltip content={<ChartTooltip/>}/>
+                      <ReferenceLine y={0} stroke="#2A4A6F" strokeDasharray="3 3"/>
+                      {stockNames.map(name => (
+                        <Line key={name} type="monotone" dataKey={name}
+                          stroke={STOCK_COLORS[name]||"#4A6580"} dot={false}
+                          strokeWidth={selectedStock===name?3:1.5}
+                          opacity={selectedStock&&selectedStock!==name?0.25:1}
+                          activeDot={{r:4, onClick:()=>setSelectedStock(name)}}
+                        />
+                      ))}
+                    </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div style={{...card,overflowY:"auto",maxHeight:430}}>
-                  <div style={{fontSize:14,color:GOLD,fontWeight:700,letterSpacing:1,marginBottom:16}}>▸ 전체 보유종목</div>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead>
-                      <tr style={{borderBottom:"1px solid #2A4A6F"}}>
-                        {["순위","종목명","업종","비중"].map(h => (
-                          <th key={h} className={h==="업종"?"hide-mobile":""} style={{padding:"6px 8px",textAlign:"left",fontWeight:600,color:"#CBD5E1",fontSize:11}}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {qData.sort((a,b)=>a.rank-b.rank).map((d,i) => (
-                        <tr key={i} style={{borderBottom:"1px solid rgba(42,74,111,0.4)",background:i%2===0?"transparent":"rgba(14,28,46,0.4)"}}>
-                          <td style={{padding:"8px",color:"#94A3B8"}}>{d.rank}</td>
-                          <td style={{padding:"8px",color:GOLD,fontWeight:800}}>{d.name}</td>
-                          <td className="hide-mobile" style={{padding:"8px",color:"#CBD5E1",fontSize:11}}>{d.sector}</td>
-                          <td style={{padding:"8px",color:"#FFFFFF",fontWeight:700}}>{Number(d.weight).toFixed(2)}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                <div style={card}>
+                  <div style={{fontSize:13,color:GOLD,fontWeight:700,letterSpacing:1,marginBottom:16}}>▸ 기간 수익률 순위</div>
+                  {rankedStocks.map(({name, ret}) => {
+                    const pos = (ret||0) >= 0;
+                    return (
+                      <div key={name} onClick={()=>{setSelectedStock(name);setActiveTab("detail");}} style={{marginBottom:14,cursor:"pointer"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:12,color:STOCK_COLORS[name]||GOLD}}>●</span>
+                            <span style={{fontSize:13,color:"#FFFFFF",fontWeight:600}}>{name}</span>
+                          </div>
+                          <span style={{fontSize:14,fontWeight:800,color:pos?"#10B981":"#EF4444"}}>
+                            {pos?"+":""}{ret?.toFixed(2)||"-"}%
+                          </span>
+                        </div>
+                        <div style={{background:"#0B1623",borderRadius:6,height:6}}>
+                          <div style={{width:(Math.abs(ret||0)/maxAbsRet*100)+"%",height:"100%",borderRadius:6,background:pos?"#10B981":"#EF4444",transition:"width 0.6s ease"}}/>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {activeTab==="sector" && (
-              <div className="grid-equal">
-                <div style={card}>
-                  <div style={{fontSize:14,color:GOLD,fontWeight:700,letterSpacing:1,marginBottom:20}}>▸ 섹터별 비중 (%)</div>
-                  <ResponsiveContainer width="100%" height={320}>
-                    <PieChart>
-                      <Pie data={sectorData} cx="50%" cy="50%" innerRadius={65} outerRadius={115} paddingAngle={3} dataKey="value"
-                        label={({name,value})=>name+" "+value+"%"} labelLine={{stroke:"#3A5A7F"}}>
-                        {sectorData.map((e,i) => <Cell key={i} fill={SECTOR_COLORS[e.name]||"#4A6580"}/>)}
-                      </Pie>
-                      <Tooltip formatter={v=>[v+"%","비중"]} contentStyle={{background:"#0F1923",border:"1px solid #2A4A6F",borderRadius:8,color:"#fff"}}/>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div style={card}>
-                  <div style={{fontSize:14,color:GOLD,fontWeight:700,letterSpacing:1,marginBottom:20}}>▸ 섹터 순위</div>
-                  {sectorData.map((s,i) => (
-                    <div key={s.name} style={{marginBottom:14}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:12,color:"#94A3B8",minWidth:20,fontWeight:600}}>#{i+1}</span>
-                          <span style={{color:SECTOR_COLORS[s.name]||"#4A6580",fontSize:16}}>●</span>
-                          <span style={{fontSize:13,color:"#FFFFFF",fontWeight:600}}>{s.name}</span>
-                        </div>
-                        <span style={{fontSize:15,fontWeight:800,color:SECTOR_COLORS[s.name]||GOLD}}>{s.value}%</span>
-                      </div>
-                      <div style={{background:"#0B1623",borderRadius:6,height:7}}>
-                        <div style={{width:((s.value/sectorData[0].value)*100)+"%",height:"100%",borderRadius:6,background:SECTOR_COLORS[s.name]||"#4A6580",transition:"width 0.6s ease"}}/>
-                      </div>
-                    </div>
+            {/* ── 오늘 등락 ── */}
+            {activeTab==="today" && (
+              <div className="fade-in" style={card}>
+                <div style={{fontSize:13,color:GOLD,fontWeight:700,letterSpacing:1,marginBottom:16}}>▸ 오늘 등락률 · {latestDate}</div>
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={todayBarData} margin={{left:10,right:20}}>
+                    <XAxis dataKey="name" tick={{fill:"#FFFFFF",fontSize:10,fontWeight:700}} axisLine={false} tickLine={false}/>
+                    <YAxis tick={{fill:"#94A3B8",fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>v+"%"}/>
+                    <Tooltip formatter={v=>[v?.toFixed(2)+"%","등락률"]} contentStyle={{background:"#0F1923",border:"1px solid #2A4A6F",borderRadius:8,color:"#fff"}}/>
+                    <ReferenceLine y={0} stroke="#2A4A6F"/>
+                    <Bar dataKey="rate" radius={[4,4,0,0]}>
+                      {todayBarData.map((d,i)=><Cell key={i} fill={(d.rate||0)>=0?"#10B981":"#EF4444"}/>)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+
+                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,marginTop:20}}>
+                  <thead>
+                    <tr style={{borderBottom:"1px solid #2A4A6F"}}>
+                      {["종목명","현재가","전일비","등락률"].map(h=>(
+                        <th key={h} style={{padding:"8px",textAlign:"left",color:"#CBD5E1",fontWeight:600,fontSize:11}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todayBarData.map((d,i)=>(
+                      <tr key={i} onClick={()=>{setSelectedStock(d.name);setActiveTab("detail");}}
+                        style={{borderBottom:"1px solid rgba(42,74,111,0.4)",cursor:"pointer",background:i%2===0?"transparent":"rgba(14,28,46,0.4)"}}>
+                        <td style={{padding:"10px 8px"}}>
+                          <span style={{color:STOCK_COLORS[d.name]||GOLD}}>● </span>
+                          <span style={{color:"#FFFFFF",fontWeight:700}}>{d.name}</span>
+                        </td>
+                        <td style={{padding:"10px 8px",color:"#FFFFFF",fontWeight:700}}>{d.price?d.price.toLocaleString():"-"}원</td>
+                        <td style={{padding:"10px 8px",color:(parseNum(d.diff)||0)>=0?"#10B981":"#EF4444"}}>{d.diff||"-"}</td>
+                        <td style={{padding:"10px 8px"}}><RateBadge val={d.rate}/></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── 종목 상세 ── */}
+            {activeTab==="detail" && (
+              <div className="fade-in">
+                <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:20}}>
+                  {stockNames.map(name=>(
+                    <button key={name} onClick={()=>setSelectedStock(name)}
+                      style={{background:selectedStock===name?(STOCK_COLORS[name]||GOLD):"rgba(14,28,46,0.7)",border:"1px solid "+(selectedStock===name?(STOCK_COLORS[name]||GOLD):"#2A4A6F"),borderRadius:8,padding:"6px 14px",fontSize:12,color:selectedStock===name?"#060D14":"#CBD5E1",cursor:"pointer",fontFamily:"inherit",fontWeight:selectedStock===name?800:400,transition:"all 0.2s"}}>
+                      {name}
+                    </button>
                   ))}
                 </div>
+
+                {selectedStock && selectedSeries.length > 0 ? (
+                  <>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+                      {[
+                        {label:"현재가",  value: selectedSeries.slice(-1)[0]?.price?.toLocaleString()+"원", color:GOLD},
+                        {label:"기간 수익률", value:(selectedSeries.slice(-1)[0]?.return>=0?"+":"")+selectedSeries.slice(-1)[0]?.return?.toFixed(2)+"%", color:selectedSeries.slice(-1)[0]?.return>=0?"#10B981":"#EF4444"},
+                        {label:"오늘 등락", value:(todayBarData.find(d=>d.name===selectedStock)?.rate>=0?"+":"")+todayBarData.find(d=>d.name===selectedStock)?.rate?.toFixed(2)+"%"||"-", color:(todayBarData.find(d=>d.name===selectedStock)?.rate||0)>=0?"#10B981":"#EF4444"},
+                        {label:"데이터 일수", value:selectedSeries.length+"일", color:"#94A3B8"},
+                      ].map(item=>(
+                        <div key={item.label} style={{...card,textAlign:"center"}}>
+                          <div style={{fontSize:10,color:"#94A3B8",marginBottom:6}}>{item.label}</div>
+                          <div style={{fontSize:16,fontWeight:800,color:item.color||GOLD}}>{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{...card,marginBottom:20}}>
+                      <div style={{fontSize:13,color:STOCK_COLORS[selectedStock]||GOLD,fontWeight:700,letterSpacing:1,marginBottom:16}}>▸ {selectedStock} 주가 추이</div>
+                      <ResponsiveContainer width="100%" height={240}>
+                        <LineChart data={selectedSeries} margin={{left:0,right:20}}>
+                          <XAxis dataKey="date" tick={{fill:"#94A3B8",fontSize:10}} axisLine={false} tickLine={false} interval="preserveStartEnd" tickFormatter={d=>d?.slice(5)}/>
+                          <YAxis tick={{fill:"#94A3B8",fontSize:10}} axisLine={false} tickLine={false} domain={["auto","auto"]} tickFormatter={v=>v?.toLocaleString()}/>
+                          <Tooltip formatter={v=>[v?.toLocaleString()+"원","주가"]} contentStyle={{background:"#0F1923",border:"1px solid #2A4A6F",borderRadius:8,color:"#fff"}}/>
+                          <Line type="monotone" dataKey="price" stroke={STOCK_COLORS[selectedStock]||GOLD} dot={false} strokeWidth={2}/>
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div style={card}>
+                      <div style={{fontSize:13,color:STOCK_COLORS[selectedStock]||GOLD,fontWeight:700,letterSpacing:1,marginBottom:16}}>▸ {selectedStock} 기간 수익률 추이</div>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <LineChart data={selectedSeries} margin={{left:0,right:20}}>
+                          <XAxis dataKey="date" tick={{fill:"#94A3B8",fontSize:10}} axisLine={false} tickLine={false} interval="preserveStartEnd" tickFormatter={d=>d?.slice(5)}/>
+                          <YAxis tick={{fill:"#94A3B8",fontSize:10}} axisLine={false} tickLine={false} tickFormatter={v=>v+"%"}/>
+                          <Tooltip formatter={v=>[v?.toFixed(2)+"%","수익률"]} contentStyle={{background:"#0F1923",border:"1px solid #2A4A6F",borderRadius:8,color:"#fff"}}/>
+                          <ReferenceLine y={0} stroke="#2A4A6F" strokeDasharray="3 3"/>
+                          <Line type="monotone" dataKey="return" stroke={STOCK_COLORS[selectedStock]||GOLD} dot={false} strokeWidth={2}/>
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{...card,textAlign:"center",padding:40,color:"#94A3B8"}}>위에서 종목을 선택해주세요</div>
+                )}
               </div>
             )}
           </div>
-        </div>
-      );
-    }
 
-    function App() {
-      const [data, setData] = useState([]);
-      const [loading, setLoading] = useState(true);
-      const [parsed, setParsed] = useState(null);
-      const [lastUpdated, setLastUpdated] = useState(null);
-
-      function loadData() {
-        setLoading(true);
-        fetch(APPS_SCRIPT_URL)
-          .then(r => r.json())
-          .then(json => {
-            if (json.success) {
-              setData(json.data || []);
-              setLastUpdated(new Date().toLocaleString("ko-KR"));
-            }
-          })
-          .finally(() => setLoading(false));
-      }
-
-      useEffect(() => { loadData(); }, []);
-
-      const quarters = [...new Set(data.map(d => d.quarter))].sort().reverse();
-      const hasData = data.length > 0;
-
-      return (
-        <div style={{fontFamily:"'Courier New',monospace",background:"linear-gradient(135deg,#060D14 0%,#0B1623 50%,#0E1C2E 100%)",minHeight:"100vh",color:"#F1F5F9"}}>
-
-          {/* 헤더 */}
-          <div style={{borderBottom:"1px solid #2A4A6F",background:"rgba(14,28,46,0.92)",position:"sticky",top:0,zIndex:100}}>
-            <div className="header-pad header-inner">
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#E2B96A,#C8962E)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#060D14",textAlign:"center",lineHeight:1.3}}>메트<br/>라이프</div>
-                <div>
-                  <div style={{fontWeight:700,fontSize:16,color:"#FFFFFF"}}>메트라이프 가치주식형 2호</div>
-                  <div className="hide-mobile" style={{fontSize:11,color:"#94A3B8",letterSpacing:2}}>VALUE STOCK FUND DASHBOARD</div>
-                </div>
-              </div>
-              <div className="header-right">
-                {hasData && (
-                  <button onClick={() => setParsed(null)} style={{background:"rgba(226,185,106,0.15)",border:"1px solid rgba(226,185,106,0.4)",borderRadius:6,padding:"5px 12px",fontSize:12,color:GOLD,cursor:"pointer",fontFamily:"inherit"}}>
-                    + PDF 업로드
-                  </button>
-                )}
-                <div style={{padding:"5px 10px",borderRadius:6,background:"rgba(226,185,106,0.15)",border:"1px solid rgba(226,185,106,0.4)",fontSize:12,color:GOLD,fontWeight:700}}>● LIVE</div>
-              </div>
-            </div>
-          </div>
-
-          {loading ? (
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"80vh",flexDirection:"column",gap:16}}>
-              <div style={{width:52,height:52,borderRadius:12,background:"linear-gradient(135deg,#E2B96A,#C8962E)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:11,color:"#060D14",animation:"pulse 1.4s infinite",textAlign:"center",lineHeight:1.3}}>가치<br/>주식</div>
-              <div style={{color:"#94A3B8",fontSize:13,letterSpacing:3}}>LOADING...</div>
-            </div>
-          ) : parsed ? (
-            <div className="content-pad">
-              <PreviewAndSave parsed={parsed} onSave={() => { setParsed(null); loadData(); }} onCancel={() => setParsed(null)} />
-            </div>
-          ) : !hasData ? (
-            <div className="content-pad">
-              <PDFUploader onParsed={setParsed} />
-            </div>
-          ) : (
-            <Dashboard data={data} quarters={quarters} />
-          )}
-
-          <div className="footer-pad" style={{borderTop:"1px solid #2A4A6F",fontSize:11,color:"#64748B"}}>
-            <span>메트라이프 가치주식형 2호 · 분기별 자산운용보고서 기준</span>
-            <span>마지막 로드: {lastUpdated||"-"}</span>
+          {/* 푸터 */}
+          <div style={{padding:"14px 28px",borderTop:"1px solid #2A4A6F",fontSize:11,color:"#64748B",display:"flex",justifyContent:"space-between"}}>
+            <span>메트라이프 가치주식형 2호 · 네이버 금융 데이터 기준</span>
+            <span>매일 오후 4시 자동 업데이트</span>
           </div>
         </div>
       );
